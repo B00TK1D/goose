@@ -12,6 +12,6 @@ while True:
     if set(packet).issubset(pastSet):
         print("good")
     else:
-        print(pow((len(pastSet)/(len(pastSet)+1)), total))
+        print(pow((len(pastSet)/(len(pastSet)+1))))
     past += packet
-    total += len(packet)
+    total += 1
