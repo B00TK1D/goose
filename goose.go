@@ -5,7 +5,7 @@ import (
 	"math/rand"
 )
 
-func combinationScore(combination [][][]byte, objective func([][]byte) float64) float64 {
+func combinationScore[T any](combination [][]T, objective func([]T) float64) float64 {
 	totalScore := 0.0
 	for _, group := range combination {
 		totalScore += objective(group)
@@ -13,14 +13,14 @@ func combinationScore(combination [][][]byte, objective func([][]byte) float64) 
 	return totalScore / float64(len(combination))
 }
 
-func addInputToCombinations(input []byte, combinations [][][][]byte, maxNumCombinations int) [][][][]byte {
+func addInputToCombinations[T any](input T, combinations [][][]T, maxNumCombinations int) [][][]T {
 	if len(combinations) == 0 {
-		return [][][][]byte{[][][]byte{[][]byte{input}}}
+		return [][][]T{[][]T{[]T{input}}}
 	}
-	newCombinations := [][][][]byte{}
+	newCombinations := [][][]T{}
 	for _, combination := range combinations {
 		for modifyGroupIndex := range combination {
-			newCombination := [][][]byte{}
+			newCombination := [][]T{}
 			for groupIndex, group := range combination {
 				newCombination = append(newCombination, group)
 				if groupIndex == modifyGroupIndex {
@@ -30,20 +30,20 @@ func addInputToCombinations(input []byte, combinations [][][][]byte, maxNumCombi
 			newCombinations = append(newCombinations, newCombination)
 		}
 		if len(combination) < maxNumCombinations {
-			newCombinations = append(newCombinations, append(combination, [][]byte{input}))
+			newCombinations = append(newCombinations, append(combination, []T{input}))
 		}
 	}
 	return newCombinations
 }
 
-func BruteForceClustering(inputs [][]byte, objective func([][]byte) float64) [][][]byte {
+func BruteForceClustering[T any](inputs []T, objective func([]T) float64) [][]T {
 	inputCount := len(inputs)
-	combinations := [][][][]byte{}
+	combinations := [][][]T{}
 
 	for i := range inputCount {
 		combinations = addInputToCombinations(inputs[i], combinations, inputCount)
 	}
-	bestCombination := [][][]byte{}
+	bestCombination := [][]T{}
 	bestScore := 0.0
 	for _, combination := range combinations {
 		score := combinationScore(combination, objective)
@@ -55,13 +55,13 @@ func BruteForceClustering(inputs [][]byte, objective func([][]byte) float64) [][
 	return bestCombination
 }
 
-func HillClimbClustering(inputs [][]byte, objective func([][]byte) float64) [][][]byte {
+func HillClimbClustering[T any](inputs []T, objective func([]T) float64) [][]T {
 	inputCount := len(inputs)
-	bestCombination := [][][]byte{}
+	bestCombination := [][]T{}
 
 	bestScore := 0.0
 	for combinationSize := range inputCount - 1 {
-		combinations := [][][][]byte{}
+		combinations := [][][]T{}
 		for i := range inputCount {
 			combinations = addInputToCombinations(inputs[i], combinations, combinationSize+1)
 		}
@@ -88,9 +88,9 @@ func HillClimbClustering(inputs [][]byte, objective func([][]byte) float64) [][]
 	return bestCombination
 }
 
-func generateRandomPopulation(parents [][][]byte, inputs [][]byte) [][][]byte {
+func generateRandomPopulation[T any](parents [][]T, inputs []T) [][]T {
 	inputCount := len(inputs)
-	population := [][][]byte{}
+	population := [][]T{}
 	for _, group := range parents {
 		population = append(population, group)
 	}
@@ -98,7 +98,7 @@ func generateRandomPopulation(parents [][][]byte, inputs [][]byte) [][][]byte {
 	for _, input := range inputs {
 		randIndex := rand.Intn(inputCount)
 		if randIndex >= len(population) {
-			population = append(population, [][]byte{input})
+			population = append(population, []T{input})
 		} else {
 			population[randIndex] = append(population[randIndex], input)
 		}
@@ -106,10 +106,10 @@ func generateRandomPopulation(parents [][][]byte, inputs [][]byte) [][][]byte {
 	return population
 }
 
-func geneticSelection(population [][][]byte, objective func([][]byte) float64) ([][][]byte, [][]byte) {
+func geneticSelection[T any](population [][]T, objective func([]T) float64) ([][]T, []T) {
 	// Evaluate set of candidates
-	nextPopulation := [][][]byte{}
-	deadInputs := [][]byte{}
+	nextPopulation := [][]T{}
+	deadInputs := []T{}
 	for _, group := range population {
 		groupScore := objective(group)
 
@@ -126,7 +126,7 @@ func geneticSelection(population [][][]byte, objective func([][]byte) float64) (
 	return nextPopulation, deadInputs
 }
 
-func geneticRecombination(population [][][]byte, objective func([][]byte) float64) [][][]byte {
+func geneticRecombination[T any](population [][]T, objective func([]T) float64) [][]T {
 	bestScore := combinationScore(population, objective)
 	bestPopulation := population
 
@@ -135,7 +135,7 @@ func geneticRecombination(population [][][]byte, objective func([][]byte) float6
 			if group1Index >= group2Index {
 				continue
 			}
-			tmpPopulation := [][][]byte{}
+			tmpPopulation := [][]T{}
 			for i, group := range population {
 				if i == group2Index {
 					continue
@@ -157,21 +157,21 @@ func geneticRecombination(population [][][]byte, objective func([][]byte) float6
 	return bestPopulation
 }
 
-func GeneticClustering(inputs [][]byte, objective func([][]byte) float64) [][][]byte {
+func GeneticClustering[T any](inputs []T, objective func([]T) float64) [][]T {
 
 	overallBestScore := 0.0
-	overallBestPopulation := [][][]byte{}
+	overallBestPopulation := [][]T{}
 
 	attemptCount := int(math.Log(float64(len(inputs))) + 2.0)
 
 	for range attemptCount {
-		deadInputs := [][]byte{}
+		deadInputs := []T{}
 		for _, input := range inputs {
 			deadInputs = append(deadInputs, input)
 		}
 
-		population := [][][]byte{}
-		bestPopulation := [][][]byte{}
+		population := [][]T{}
+		bestPopulation := [][]T{}
 		currentScore := 0.0
 		bestScore := 0.0
 
