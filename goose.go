@@ -1,105 +1,19 @@
 package main
 
 import (
-	"fmt"
+	"math"
+	"math/rand"
 )
 
-func LCS(inputs [][]byte) (int, []int) {
-	inputsCount := len(inputs)
-	matchIndices := make([]int, inputsCount)
-	lengths := make([]int, inputsCount)
-	minLen := len(inputs[0])
-	for i, input := range inputs {
-		lengths[i] = len(input)
-		if lengths[i] < minLen {
-			minLen = lengths[i]
-		}
+func combinationScore(combination [][][]byte, objective func([][]byte) float64) float64 {
+	totalScore := 0.0
+	for _, group := range combination {
+		totalScore += objective(group)
 	}
-	matchedLen := 0
-	upperBound := minLen
-	lowerBound := 1
-	subsetLen := minLen
-	startIndex1 := 0
-	startIndex2 := 0
-	for minLen > 0 {
-		subsetIndex := inputsCount - 1
-		subsetLen = (upperBound + lowerBound) / 2
-		startIndex1 = 0
-		for startIndex1 <= lengths[0]-subsetLen {
-			startIndex2 = 0
-			subsetIndex = inputsCount - 1
-			for startIndex2 <= lengths[subsetIndex]-subsetLen && subsetIndex > 0 {
-				equal := true
-				for checkIndex := 0; checkIndex < subsetLen; checkIndex++ {
-					if inputs[0][startIndex1+checkIndex] != inputs[subsetIndex][startIndex2+checkIndex] {
-						equal = false
-						break
-					}
-				}
-				if equal {
-					matchIndices[subsetIndex] = startIndex2
-					subsetIndex--
-					startIndex2 = 0
-					continue
-				}
-				startIndex2++
-			}
-			if subsetIndex == 0 {
-				matchIndices[0] = startIndex1
-				matchedLen = subsetLen
-				break
-			}
-			startIndex1++
-		}
-		if subsetIndex == 0 {
-			lowerBound = subsetLen + 1
-		} else {
-			upperBound = subsetLen - 1
-		}
-		if lowerBound > upperBound {
-			break
-		}
-	}
-	return matchedLen, matchIndices
+	return totalScore / float64(len(combination))
 }
 
-func RLCS(inputs [][]byte) int {
-	preInputs := [][]byte{}
-	postInputs := [][]byte{}
-	matchLen, indices := LCS(inputs)
-	if matchLen == 0 {
-		return 0
-	}
-	for i, index := range indices {
-		preInputs = append(preInputs, inputs[i][0:index])
-		postInputs = append(postInputs, inputs[i][index+matchLen:len(inputs[i])])
-	}
-	return matchLen + RLCS(preInputs) + RLCS(postInputs)
-}
-
-func normalizedRLCS(inputs [][]byte) float64 {
-	maxLen := 0
-	for _, input := range inputs {
-		length := len(input)
-		if maxLen < length {
-			maxLen = length
-		}
-	}
-	return float64(RLCS(inputs)) / float64(maxLen)
-}
-
-func normalizedCombinationRLCS(combination [][][]byte) float64 {
-	totalRLCS := 0.0
-  elements := 0.0
-	for _, cluster := range combination {
-    clusterLen := float64(len(cluster))
-		totalRLCS += normalizedRLCS(cluster) * clusterLen
-    elements += clusterLen
-	}
-  return totalRLCS / elements
-}
-
-func addInputToCombinations(input []byte, combinations [][][][]byte) [][][][]byte {
+func addInputToCombinations(input []byte, combinations [][][][]byte, maxNumCombinations int) [][][][]byte {
 	if len(combinations) == 0 {
 		return [][][][]byte{[][][]byte{[][]byte{input}}}
 	}
@@ -115,31 +29,24 @@ func addInputToCombinations(input []byte, combinations [][][][]byte) [][][][]byt
 			}
 			newCombinations = append(newCombinations, newCombination)
 		}
-		newCombinations = append(newCombinations, append(combination, [][]byte{input}))
+		if len(combination) < maxNumCombinations {
+			newCombinations = append(newCombinations, append(combination, [][]byte{input}))
+		}
 	}
 	return newCombinations
 }
 
-func bruteForceClustering(inputs [][]byte, tuning float64) [][][]byte {
+func BruteForceClustering(inputs [][]byte, objective func([][]byte) float64) [][][]byte {
 	inputCount := len(inputs)
 	combinations := [][][][]byte{}
 
 	for i := range inputCount {
-		combinations = addInputToCombinations(inputs[i], combinations)
+		combinations = addInputToCombinations(inputs[i], combinations, inputCount)
 	}
 	bestCombination := [][][]byte{}
 	bestScore := 0.0
-	totalElements := 0.0
 	for _, combination := range combinations {
-		elements := float64(len(combination))
-		if elements > totalElements {
-			totalElements = elements
-		}
-	}
-	for _, combination := range combinations {
-		scoreRLCS := normalizedCombinationRLCS(combination)
-		scoreClusters := (totalElements - float64(len(combination))) / totalElements
-		score := (tuning * scoreRLCS) + ((1.0 - tuning) * scoreClusters)
+		score := combinationScore(combination, objective)
 		if score >= bestScore {
 			bestCombination = combination
 			bestScore = score
@@ -148,34 +55,156 @@ func bruteForceClustering(inputs [][]byte, tuning float64) [][][]byte {
 	return bestCombination
 }
 
-func printCombination(combination [][][]byte) {
-	fmt.Println("Combination:")
-	for _, group := range combination {
-		var groupStrings []string
-		for _, b := range group {
-			groupStrings = append(groupStrings, string(b))
+func HillClimbClustering(inputs [][]byte, objective func([][]byte) float64) [][][]byte {
+	inputCount := len(inputs)
+	bestCombination := [][][]byte{}
+
+	bestScore := 0.0
+	for combinationSize := range inputCount - 1 {
+		combinations := [][][][]byte{}
+		for i := range inputCount {
+			combinations = addInputToCombinations(inputs[i], combinations, combinationSize+1)
 		}
-		fmt.Println("  Group:", groupStrings)
+		bestSizeScore := 0.0
+		bestSizeCombination := bestCombination
+		for _, combination := range combinations {
+			if len(combination) != combinationSize+1 {
+				continue
+			}
+			score := combinationScore(combination, objective)
+			if score >= bestSizeScore {
+				bestSizeScore = score
+				bestSizeCombination = combination
+				bestCombination = combination
+			}
+		}
+		if bestSizeScore >= bestScore {
+			bestScore = bestSizeScore
+			bestCombination = bestSizeCombination
+		} else {
+			return bestCombination
+		}
 	}
+	return bestCombination
 }
 
-func printCombinations(combinations [][][][]byte) {
-	for _, combination := range combinations {
-		printCombination(combination)
+func generateRandomPopulation(parents [][][]byte, inputs [][]byte) [][][]byte {
+	inputCount := len(inputs)
+	population := [][][]byte{}
+	for _, group := range parents {
+		population = append(population, group)
 	}
+	// Mutate the parents
+	for _, input := range inputs {
+		randIndex := rand.Intn(inputCount)
+		if randIndex >= len(population) {
+			population = append(population, [][]byte{input})
+		} else {
+			population[randIndex] = append(population[randIndex], input)
+		}
+	}
+	return population
 }
 
-func main() {
-	tests := [][]byte{
-		[]byte("428efctesting123"),
-		[]byte("444efgtesting456"),
-		[]byte("424efgtesting456"),
+func geneticSelection(population [][][]byte, objective func([][]byte) float64) ([][][]byte, [][]byte) {
+	// Evaluate set of candidates
+	nextPopulation := [][][]byte{}
+	deadInputs := [][]byte{}
+	for _, group := range population {
+		groupScore := objective(group)
+
+		// Mutation for next generation
+		threshold := rand.Float64() * rand.Float64()
+		if groupScore > threshold {
+			nextPopulation = append(nextPopulation, group)
+		} else {
+			for _, value := range group {
+				deadInputs = append(deadInputs, value)
+			}
+		}
+	}
+	return nextPopulation, deadInputs
+}
+
+func geneticRecombination(population [][][]byte, objective func([][]byte) float64) [][][]byte {
+	bestScore := combinationScore(population, objective)
+	bestPopulation := population
+
+	for group1Index := range population {
+		for group2Index, group2 := range population {
+			if group1Index >= group2Index {
+				continue
+			}
+			tmpPopulation := [][][]byte{}
+			for i, group := range population {
+				if i == group2Index {
+					continue
+				}
+				tmpPopulation = append(tmpPopulation, group)
+			}
+			tmpPopulation[group1Index] = append(tmpPopulation[group1Index], group2...)
+			tmpScore := combinationScore(tmpPopulation, objective)
+			if tmpScore > bestScore {
+				bestScore = tmpScore
+				bestPopulation = tmpPopulation
+			}
+		}
 	}
 
-	//rlcsSum := normalizedRLCS(tests)
-	//fmt.Println("Normalized RLCS:", rlcsSum)
-	optimal := bruteForceClustering(tests, 0.5)
-  optimalRLCS := normalizedCombinationRLCS(optimal)
-	printCombination(optimal)
-  fmt.Println("RLCS:", optimalRLCS)
+	if bestScore > combinationScore(population, objective) {
+		return geneticRecombination(bestPopulation, objective)
+	}
+	return bestPopulation
+}
+
+func GeneticClustering(inputs [][]byte, objective func([][]byte) float64) [][][]byte {
+
+	overallBestScore := 0.0
+	overallBestPopulation := [][][]byte{}
+
+	attemptCount := int(math.Log(float64(len(inputs))) + 2.0)
+
+	for range attemptCount {
+		deadInputs := [][]byte{}
+		for _, input := range inputs {
+			deadInputs = append(deadInputs, input)
+		}
+
+		population := [][][]byte{}
+		bestPopulation := [][][]byte{}
+		currentScore := 0.0
+		bestScore := 0.0
+
+		epochCount := len(inputs) * len(inputs)
+
+		// Select initial candidate population
+		population, _ = geneticSelection(bestPopulation, objective)
+
+		for range epochCount {
+			// Mutation
+			population = generateRandomPopulation(population, deadInputs)
+
+			// Fitness assessment (Evaluation)
+			currentScore = combinationScore(population, objective)
+
+			// Selection
+			if currentScore > bestScore {
+				bestPopulation = population
+				bestScore = currentScore
+			}
+
+			// Recombination
+			population, deadInputs = geneticSelection(bestPopulation, objective)
+		}
+
+		bestPopulation = geneticRecombination(bestPopulation, objective)
+		bestScore = combinationScore(bestPopulation, objective)
+
+		if bestScore > overallBestScore {
+			overallBestScore = bestScore
+			overallBestPopulation = bestPopulation
+		}
+	}
+
+	return overallBestPopulation
 }
